@@ -229,11 +229,11 @@ class WithUARTIOCells extends OverrideIOBinder({
 })
 // DOC include end: WithUARTIOCells
 
-class WithSPIIOPunchthrough extends OverrideLazyIOBinder({
+class WithSPIIOPunchthrough(maxMHz: Double = 1) extends OverrideLazyIOBinder({
   (system: HasPeripherySPI) => {
     // attach resource to 1st SPI
     if (system.tlSpiNodes.size > 0) ResourceBinding {
-      Resource(new MMCDevice(system.tlSpiNodes.head.device, 1), "reg").bind(ResourceAddress(0))
+      Resource(new MMCDevice(system.tlSpiNodes.head.device, maxMHz), "reg").bind(ResourceAddress(0))
     }
     InModuleBody {
       val spi = system.spi
