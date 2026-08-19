@@ -14,7 +14,8 @@ sim_name := none
 #########################################################################################
 # include shared variables
 #########################################################################################
-SUB_PROJECT ?= vcu118
+#SUB_PROJECT ?= vcu118
+SUB_PROJECT ?= microphasea7
 
 ifeq ($(SUB_PROJECT),vc707)
 	SBT_PROJECT       ?= chipyard_fpga
@@ -100,6 +101,34 @@ ifeq ($(SUB_PROJECT),datastorm)
 	FPGA_BRAND        ?= altera
 endif
 
+ifeq ($(SUB_PROJECT),microphasea7)
+	SBT_PROJECT       ?= chipyard_fpga
+	MODEL             ?= MicrophaseA7Harness
+	VLOG_MODEL        ?= MicrophaseA7Harness
+	MODEL_PACKAGE     ?= chipyard.fpga.microphasea7
+	CONFIG            ?= RocketMicrophaseA7Config
+	CONFIG_PACKAGE    ?= chipyard.fpga.microphasea7
+	GENERATOR_PACKAGE ?= chipyard
+	TB                ?= none # unused
+	TOP               ?= ChipTop
+	BOARD			  ?= microphasea7
+	FPGA_BRAND        ?= xilinx
+endif
+
+ifeq ($(SUB_PROJECT),ku5p)
+	SBT_PROJECT       ?= chipyard_fpga
+	MODEL             ?= Ku5pHarness
+	VLOG_MODEL        ?= Ku5pHarness
+	MODEL_PACKAGE     ?= chipyard.fpga.ku5p
+	CONFIG            ?= RocketKu5pConfig
+	CONFIG_PACKAGE    ?= chipyard.fpga.ku5p
+	GENERATOR_PACKAGE ?= chipyard
+	TB                ?= none # unused
+	TOP               ?= ChipTop
+	BOARD             ?= ku5p
+	FPGA_BRAND        ?= xilinx
+endif
+
 export USE_CHISEL6=1
 
 include $(base_dir)/variables.mk
@@ -152,7 +181,16 @@ $(synth_list_f): $(sim_common_files) $(all_vsrcs)
 
 ifeq ($(FPGA_BRAND),xilinx)
 BIT_FILE := $(build_dir)/obj/$(MODEL).bit
-$(BIT_FILE): $(synth_list_f)
+BIN_FILE := $(build_dir)/obj/$(MODEL).bin
+xilinx_flow_files := \
+	$(fpga_common_script_dir)/vivado.tcl \
+	$(fpga_common_script_dir)/prologue.tcl \
+	$(fpga_common_script_dir)/bitstream.tcl
+xilinx_board_files := \
+	$(wildcard $(fpga_dir)/$(BOARD)/tcl/*.tcl) \
+	$(wildcard $(fpga_dir)/$(BOARD)/constraints/*.tcl) \
+	$(wildcard $(fpga_dir)/$(BOARD)/constraints/*.xdc)
+$(BIT_FILE): $(synth_list_f) $(xilinx_flow_files) $(xilinx_board_files)
 	cd $(build_dir); vivado \
 		-nojournal -mode batch \
 		-source $(fpga_common_script_dir)/vivado.tcl \
@@ -175,6 +213,21 @@ endif
 
 .PHONY: bitstream
 bitstream: $(BIT_FILE)
+
+ifeq ($(SUB_PROJECT),ku5p)
+KU5P_CFGMEM_BIN_TCL := $(fpga_common_script_dir)/write_cfgmem_bin.tcl
+
+$(BIN_FILE): $(BIT_FILE) $(KU5P_CFGMEM_BIN_TCL)
+	cd $(build_dir); vivado \
+		-nojournal -mode batch \
+		-source $(KU5P_CFGMEM_BIN_TCL) \
+		-tclargs "$(BIT_FILE)" "$(BIN_FILE)" spix4 16
+
+.PHONY: flash-bin
+flash-bin: $(BIN_FILE)
+	@test -f "$(BIN_FILE)" || { echo "Missing configuration image: $(BIN_FILE)"; exit 1; }
+	@echo "KU5P SPI flash image: $(BIN_FILE)"
+endif
 
 .PHONY: debug-bitstream
 debug-bitstream: $(build_dir)/obj/post_synth.dcp
