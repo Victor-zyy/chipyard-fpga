@@ -1,6 +1,6 @@
 [submodule "fpga/fpga-shells"]
 	path = fpga/fpga-shells
-	url = https://github.com/chipsalliance/rocket-chip-fpga-shells.git
+    url = https://github.com/Victor-zyy/rocket-chip-fpga-shells.git
 [submodule "generators/bar-fetchers"]
 	path = generators/bar-fetchers
 	url = https://github.com/ucb-bar/bar-fetchers.git
@@ -24,7 +24,7 @@
 	url = https://github.com/ucb-bar/FFTGenerator.git
 [submodule "generators/gemmini"]
 	path = generators/gemmini
-	url = https://github.com/ucb-bar/gemmini.git
+    url = https://github.com/Victor-zyy/gemmini-dev.git
 [submodule "generators/hardfloat"]
 	path = generators/hardfloat
 	url = https://github.com/ucb-bar/berkeley-hardfloat.git
@@ -75,7 +75,7 @@
 	url = https://github.com/embench/embench-iot.git
 [submodule "software/firemarshal"]
 	path = software/firemarshal
-	url = https://github.com/firesim/FireMarshal.git
+    url = https://github.com/Victor-zyy/firemarshal-dev.git
 [submodule "software/nvdla-workload"]
 	path = software/nvdla-workload
 	url = https://github.com/ucb-bar/nvdla-workload.git
