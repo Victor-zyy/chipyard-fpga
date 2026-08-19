@@ -66,6 +66,62 @@ trait CanHaveChosenInDTS { this: BaseSubsystem =>
   }
 }
 
+case class PMUEventToMhpmevent(eventIdx: BigInt, selector: BigInt)
+case class PMUEventToMhpmcounters(eventIdxStart: BigInt, eventIdxEnd: BigInt, counterMask: BigInt)
+case class PMURawEventToMhpmcounters(selector: BigInt, selectorMask: BigInt, counterMask: BigInt)
+
+case class PMUDeviceTreeParams(
+  eventToMhpmevent: Seq[PMUEventToMhpmevent],
+  eventToMhpmcounters: Seq[PMUEventToMhpmcounters],
+  rawEventToMhpmcounters: Seq[PMURawEventToMhpmcounters])
+
+/** Optional root-level `riscv,pmu` node consumed by OpenSBI's generic platform. */
+case object PMUDeviceTreeKey extends Field[Option[PMUDeviceTreeParams]](None)
+
+trait CanHavePMUInDTS { this: BaseSubsystem =>
+  p(PMUDeviceTreeKey).foreach { params =>
+    val maxU32 = (BigInt(1) << 32) - 1
+    val maxU64 = (BigInt(1) << 64) - 1
+
+    def u32(value: BigInt): ResourceInt = {
+      require(value >= 0 && value <= maxU32, s"PMU DTS cell does not fit in 32 bits: $value")
+      ResourceInt(value)
+    }
+
+    def u64(value: BigInt): Seq[ResourceValue] = {
+      require(value >= 0 && value <= maxU64, s"PMU DTS value does not fit in 64 bits: $value")
+      Seq(u32(value >> 32), u32(value & maxU32))
+    }
+
+    val pmu = new Device {
+      def describe(resources: ResourceBindings): Description = {
+        val eventToMhpmevent = params.eventToMhpmevent.flatMap { event =>
+          Seq(u32(event.eventIdx)) ++ u64(event.selector)
+        }
+        val eventToMhpmcounters = params.eventToMhpmcounters.flatMap { eventRange =>
+          Seq(
+            u32(eventRange.eventIdxStart),
+            u32(eventRange.eventIdxEnd),
+            u32(eventRange.counterMask))
+        }
+        val rawEventToMhpmcounters = params.rawEventToMhpmcounters.flatMap { rawRange =>
+          u64(rawRange.selector) ++ u64(rawRange.selectorMask) ++ Seq(u32(rawRange.counterMask))
+        }
+
+        Description("pmu", Map(
+          "compatible" -> Seq(ResourceString("riscv,pmu")),
+          "riscv,event-to-mhpmevent" -> eventToMhpmevent,
+          "riscv,event-to-mhpmcounters" -> eventToMhpmcounters,
+          "riscv,raw-event-to-mhpmcounters" -> rawEventToMhpmcounters).filterNot(_._2.isEmpty))
+      }
+    }
+
+    ResourceBinding {
+      Resource(pmu, "exists").bind(ResourceString("yes"))
+    }
+  }
+}
+
 class ChipyardSubsystem(implicit p: Parameters) extends BaseSubsystem
     with InstantiatesHierarchicalElements
     with HasTileNotificationSinks
@@ -77,6 +133,7 @@ class ChipyardSubsystem(implicit p: Parameters) extends BaseSubsystem
     with HasHierarchicalElements
     with CanHaveHTIF
     with CanHaveChosenInDTS
+    with CanHavePMUInDTS
 {
   def coreMonitorBundles = totalTiles.values.map {
     case r: RocketTile => r.module.core.rocketImpl.coreMonitorBundle
