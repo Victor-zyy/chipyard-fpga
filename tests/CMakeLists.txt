@@ -88,6 +88,8 @@ add_executable(symmetric symmetric.c)
 add_executable(ctc-test ctc-test.c)
 add_executable(multi-ctc-test multi-ctc-test.c)
 add_executable(triple-chiplet triple-chiplet.c)
+add_executable(daq_mmio daq_mmio.c)
+add_executable(daq_irq daq_irq.c)
 
 #################################
 # Disassembly
@@ -129,6 +131,8 @@ add_dump_target(symmetric)
 add_dump_target(ctc-test)
 add_dump_target(multi-ctc-test)
 add_dump_target(triple-chiplet)
+add_dump_target(daq_mmio)
+add_dump_target(daq_irq)
 
 
 # Add custom command to generate spiflash.img from spiflash.py
