@@ -136,13 +136,43 @@ object Ku5pGemminiConfigs {
   val inferenceConfig = gemmini.GemminiConfigs.defaultConfig.copy(
     dataflow = gemmini.Dataflow.WS,
     has_training_convs = false,
+    has_silu_lut = true,
     use_dsp_for_mac = true)
+
+  // FPGA A/B control: bit-for-bit configuration intent is identical to the
+  // SiLU design above except that the programmable LUT is not elaborated.
+  val inferenceNoSiluConfig = inferenceConfig.copy(
+    has_silu_lut = false)
 }
 
 class GemminiRocketKu5pConfig extends Config(
   new gemmini.DefaultGemminiConfig(Ku5pGemminiConfigs.inferenceConfig) ++
   new WithKu5pPMU(8) ++
   new WithKu5pTweaks ++  
+  new freechips.rocketchip.subsystem.WithNBanks(1) ++
+  new freechips.rocketchip.subsystem.WithInclusiveCache(
+    nWays = 4,
+    capacityKB = 128) ++
+  //new chipyard.config.WithBroadcastManager ++
+  new chipyard.config.WithSystemBusWidth(128) ++
+  new chipyard.RocketConfig)
+
+class GemminiRocketKu5pNoSiluConfig extends Config(
+  new gemmini.DefaultGemminiConfig(Ku5pGemminiConfigs.inferenceNoSiluConfig) ++
+  new WithKu5pPMU(8) ++
+  new WithKu5pTweaks ++
+  new freechips.rocketchip.subsystem.WithNBanks(1) ++
+  new freechips.rocketchip.subsystem.WithInclusiveCache(
+    nWays = 4,
+    capacityKB = 128) ++
+  //new chipyard.config.WithBroadcastManager ++
+  new chipyard.config.WithSystemBusWidth(128) ++
+  new chipyard.RocketConfig)
+
+class GemminiRocketKu5pSimConfig extends Config(
+  new gemmini.DefaultGemminiConfig(Ku5pGemminiConfigs.inferenceConfig) ++
+  new WithKu5pPMU(8) ++
+  new WithKu5pSimPeripherals++
   new freechips.rocketchip.subsystem.WithNBanks(1) ++
   new freechips.rocketchip.subsystem.WithInclusiveCache(
     nWays = 4,
