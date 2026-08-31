@@ -94,8 +94,11 @@ add_executable(daq_irq daq_irq.c)
 set(GEMMINI_TEST_ROOT
     "${CMAKE_CURRENT_SOURCE_DIR}/../generators/gemmini/software/gemmini-rocc-tests")
 add_executable(gemmini-silu-rtl gemmini-silu-rtl.c)
+add_executable(gemmini-exact-resadd gemmini-exact-resadd.c)
 target_include_directories(gemmini-silu-rtl PRIVATE ${GEMMINI_TEST_ROOT})
+target_include_directories(gemmini-exact-resadd PRIVATE ${GEMMINI_TEST_ROOT})
 target_link_libraries(gemmini-silu-rtl PRIVATE m)
+target_link_libraries(gemmini-exact-resadd PRIVATE m)
 
 #################################
 # Disassembly
@@ -140,6 +143,7 @@ add_dump_target(triple-chiplet)
 add_dump_target(daq_mmio)
 add_dump_target(daq_irq)
 add_dump_target(gemmini-silu-rtl)
+add_dump_target(gemmini-exact-resadd)
 
 
 # Add custom command to generate spiflash.img from spiflash.py
