@@ -95,10 +95,19 @@ set(GEMMINI_TEST_ROOT
     "${CMAKE_CURRENT_SOURCE_DIR}/../generators/gemmini/software/gemmini-rocc-tests")
 add_executable(gemmini-silu-rtl gemmini-silu-rtl.c)
 add_executable(gemmini-exact-resadd gemmini-exact-resadd.c)
+add_executable(gemmini-exact-gather gemmini-exact-gather.c)
+add_executable(gemmini-exact-gather-integration
+               gemmini-exact-gather-integration.c)
 target_include_directories(gemmini-silu-rtl PRIVATE ${GEMMINI_TEST_ROOT})
 target_include_directories(gemmini-exact-resadd PRIVATE ${GEMMINI_TEST_ROOT})
+target_include_directories(gemmini-exact-gather PRIVATE ${GEMMINI_TEST_ROOT})
+target_include_directories(gemmini-exact-gather-integration
+                           PRIVATE ${GEMMINI_TEST_ROOT})
+target_compile_definitions(gemmini-exact-gather PRIVATE HAS_EXACT_GATHER)
 target_link_libraries(gemmini-silu-rtl PRIVATE m)
 target_link_libraries(gemmini-exact-resadd PRIVATE m)
+target_link_libraries(gemmini-exact-gather PRIVATE m)
+target_link_libraries(gemmini-exact-gather-integration PRIVATE m)
 
 #################################
 # Disassembly
@@ -144,6 +153,8 @@ add_dump_target(daq_mmio)
 add_dump_target(daq_irq)
 add_dump_target(gemmini-silu-rtl)
 add_dump_target(gemmini-exact-resadd)
+add_dump_target(gemmini-exact-gather)
+add_dump_target(gemmini-exact-gather-integration)
 
 
 # Add custom command to generate spiflash.img from spiflash.py
