@@ -138,6 +138,7 @@ object Ku5pGemminiConfigs {
     has_training_convs = false,
     has_silu_lut = true,
     has_exact_resadd = true,
+    has_exact_gather = true,
     use_dsp_for_mac = true)
 
   // FPGA A/B control: bit-for-bit configuration intent is identical to the
