@@ -95,6 +95,16 @@ set(GEMMINI_TEST_ROOT
     "${CMAKE_CURRENT_SOURCE_DIR}/../generators/gemmini/software/gemmini-rocc-tests")
 add_executable(gemmini-silu-rtl gemmini-silu-rtl.c)
 add_executable(gemmini-exact-resadd gemmini-exact-resadd.c)
+add_executable(gemmini-layer-matmul gemmini-layer-matmul.c)
+target_include_directories(gemmini-layer-matmul PRIVATE ${GEMMINI_TEST_ROOT})
+target_compile_definitions(gemmini-layer-matmul PRIVATE HAS_LAYER_MATMUL GEMMINI_LAYER_TEST_TRACE=0)
+target_link_libraries(gemmini-layer-matmul PRIVATE m)
+# Same fixed test vectors, but with command-by-command diagnostic printing.
+# Acceptance must use gemmini-layer-matmul (trace=0), not this slowed path.
+add_executable(gemmini-layer-matmul-trace gemmini-layer-matmul.c)
+target_include_directories(gemmini-layer-matmul-trace PRIVATE ${GEMMINI_TEST_ROOT})
+target_compile_definitions(gemmini-layer-matmul-trace PRIVATE HAS_LAYER_MATMUL GEMMINI_LAYER_TEST_TRACE=1)
+target_link_libraries(gemmini-layer-matmul-trace PRIVATE m)
 add_executable(gemmini-exact-gather gemmini-exact-gather.c)
 add_executable(gemmini-exact-gather-integration
                gemmini-exact-gather-integration.c)

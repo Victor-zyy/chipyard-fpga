@@ -159,6 +159,23 @@ class GemminiRocketKu5pConfig extends Config(
   new chipyard.config.WithSystemBusWidth(128) ++
   new chipyard.RocketConfig)
 
+// Independent experimental configs; the validated configs above remain intact.
+class GemminiLayerRocketKu5pConfig extends Config(
+  new gemmini.DefaultGemminiConfig(Ku5pGemminiConfigs.inferenceConfig.copy(
+    has_layer_matmul = true)) ++
+  new WithKu5pPMU(8) ++ new WithKu5pTweaks ++
+  new freechips.rocketchip.subsystem.WithNBanks(1) ++
+  new freechips.rocketchip.subsystem.WithInclusiveCache(nWays = 4, capacityKB = 128) ++
+  new chipyard.config.WithSystemBusWidth(128) ++ new chipyard.RocketConfig)
+
+class GemminiLayerRocketKu5pSimConfig extends Config(
+  new gemmini.DefaultGemminiConfig(Ku5pGemminiConfigs.inferenceConfig.copy(
+    has_layer_matmul = true)) ++
+  new WithKu5pPMU(8) ++ new WithKu5pSimPeripherals ++
+  new freechips.rocketchip.subsystem.WithNBanks(1) ++
+  new freechips.rocketchip.subsystem.WithInclusiveCache(nWays = 4, capacityKB = 128) ++
+  new chipyard.config.WithSystemBusWidth(128) ++ new chipyard.RocketConfig)
+
 class GemminiRocketKu5pNoSiluConfig extends Config(
   new gemmini.DefaultGemminiConfig(Ku5pGemminiConfigs.inferenceNoSiluConfig) ++
   new WithKu5pPMU(8) ++
