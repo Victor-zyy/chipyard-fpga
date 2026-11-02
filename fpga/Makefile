@@ -129,6 +129,20 @@ ifeq ($(SUB_PROJECT),ku5p)
 	FPGA_BRAND        ?= xilinx
 endif
 
+ifeq ($(SUB_PROJECT),zu19eg)
+	SBT_PROJECT       ?= chipyard_fpga
+	MODEL             ?= Zu19egHarness
+	VLOG_MODEL        ?= Zu19egHarness
+	MODEL_PACKAGE     ?= chipyard.fpga.zu19eg
+	CONFIG            ?= RocketZu19egConfig
+	CONFIG_PACKAGE    ?= chipyard.fpga.zu19eg
+	GENERATOR_PACKAGE ?= chipyard
+	TB                ?= none
+	TOP               ?= ChipTop
+	BOARD             ?= zu19eg
+	FPGA_BRAND        ?= xilinx
+endif
+
 export USE_CHISEL6=1
 
 include $(base_dir)/variables.mk
@@ -137,7 +151,11 @@ include $(base_dir)/variables.mk
 # setup the board to use
 
 .PHONY: default
+ifeq ($(SUB_PROJECT),zu19eg)
+default: bitstream
+else
 default: $(mcs)
+endif
 
 #########################################################################################
 # misc. directories

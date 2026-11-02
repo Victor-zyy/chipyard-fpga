@@ -31,3 +31,5 @@ project/project/
 .vscode/
 tests/build/
 .vscode-ctags
+*.bin
+*.elf
