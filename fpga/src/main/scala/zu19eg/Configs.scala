@@ -126,6 +126,18 @@ class GemminiRocketZu19eg100MHzConfig extends Config(
   new WithZu19egFrequency(100.0) ++
   new GemminiRocketZu19egConfig)
 
+// Timing experiment: same ISA, array, memory sizes and eight-cycle scale latency.
+// The original 50/100 MHz configurations retain the legacy scaler for A/B.
+class GemminiRocketZu19eg100MHzScalePipeConfig extends Config(
+  new gemmini.DefaultGemminiConfig(Zu19egGemminiConfigs.inferenceConfig.copy(
+    acc_scale_fp32_pipeline = true)) ++
+  // DefaultGemminiConfig appends BuildRoCC; do not stack it on a config that
+  // already contains Gemmini, or both accelerators would decode custom3.
+  new WithZu19egPMU(8) ++ new WithZu19egTweaks(100.0) ++
+  new freechips.rocketchip.subsystem.WithNBanks(1) ++
+  new freechips.rocketchip.subsystem.WithInclusiveCache(nWays = 4, capacityKB = 128) ++
+  new chipyard.config.WithSystemBusWidth(128) ++ new chipyard.RocketConfig)
+
 class GemminiRocketZu19egSimConfig extends Config(
   new gemmini.DefaultGemminiConfig(Zu19egGemminiConfigs.inferenceConfig) ++
   new WithZu19egPMU(8) ++ new WithZu19egSimPeripherals ++
