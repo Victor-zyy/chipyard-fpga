@@ -119,6 +119,21 @@ target_link_libraries(gemmini-exact-resadd PRIVATE m)
 target_link_libraries(gemmini-exact-gather PRIVATE m)
 target_link_libraries(gemmini-exact-gather-integration PRIVATE m)
 
+# Small ordering regressions for the ZU19EG ScalePipe TestHarness configs.
+set(GEMMINI_ORDERING_HEADER
+    "${GEMMINI_TEST_ROOT}/include/gemmini_params_zu19eg.h"
+    CACHE FILEPATH "Explicit hardware parameter header for ordering tests")
+add_executable(gemmini-ordering-raw gemmini-ordering.c)
+add_executable(gemmini-ordering-exact gemmini-ordering.c)
+foreach(t gemmini-ordering-raw gemmini-ordering-exact)
+    target_include_directories(${t} PRIVATE ${GEMMINI_TEST_ROOT})
+    target_compile_definitions(${t} PRIVATE BAREMETAL=1)
+    target_compile_options(${t} PRIVATE -include ${GEMMINI_ORDERING_HEADER} -fno-fast-math)
+    target_link_libraries(${t} PRIVATE m)
+endforeach()
+target_compile_definitions(gemmini-ordering-raw PRIVATE ORDER_EXACT=0)
+target_compile_definitions(gemmini-ordering-exact PRIVATE ORDER_EXACT=1)
+
 #################################
 # Disassembly
 #################################
