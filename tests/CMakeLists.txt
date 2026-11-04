@@ -134,6 +134,19 @@ endforeach()
 target_compile_definitions(gemmini-ordering-raw PRIVATE ORDER_EXACT=0)
 target_compile_definitions(gemmini-ordering-exact PRIVATE ORDER_EXACT=1)
 
+# Same RAW ELF used across all attribution configs. Separate processes ensure
+# the first-Get injector also delays A in the fenced control, not only overlap.
+foreach(case overlap fenced)
+    set(t gemmini-ordering-raw-${case})
+    add_executable(${t} gemmini-ordering.c)
+    target_include_directories(${t} PRIVATE ${GEMMINI_TEST_ROOT})
+    target_compile_definitions(${t} PRIVATE BAREMETAL=1 ORDER_EXACT=0)
+    target_compile_options(${t} PRIVATE -include ${GEMMINI_ORDERING_HEADER} -fno-fast-math)
+    target_link_libraries(${t} PRIVATE m)
+endforeach()
+target_compile_definitions(gemmini-ordering-raw-overlap PRIVATE ORDER_ONLY_CASE=1)
+target_compile_definitions(gemmini-ordering-raw-fenced PRIVATE ORDER_ONLY_CASE=2)
+
 #################################
 # Disassembly
 #################################

@@ -11,6 +11,15 @@
 #ifndef ORDER_EXACT
 #define ORDER_EXACT 0
 #endif
+// Attribution runs one case per fresh simulation, so the one-shot response
+// injector targets A in BOTH the overlap and fenced-control experiments.
+// Default 0 preserves the original three-case regression.
+#ifndef ORDER_ONLY_CASE
+#define ORDER_ONLY_CASE 0
+#endif
+#if ORDER_ONLY_CASE < 0 || ORDER_ONLY_CASE > 2
+#error "ORDER_ONLY_CASE must be 0 (all), 1 (overlap), or 2 (fenced control)"
+#endif
 #if DIM != 16 || ACC_ROWS != 1024
 #error "Ordering test targets ZU19EG DIM16 ACC64"
 #endif
@@ -127,6 +136,10 @@ int main(void)
 {
     puts("[INFO] ordering-v1: full RoCC path, no Linux/MMU coverage, NOT a benchmark");
     printf("[INFO] DIM=%d ACC_ROWS=%d exact=%d\n", DIM, ACC_ROWS, ORDER_EXACT);
+#if ORDER_ONLY_CASE
+    printf("[ATTR] ordering-attribution-v1 single_case=%d exact=%d\n",
+        ORDER_ONLY_CASE, ORDER_EXACT);
+#endif
     unsigned rows = BANK_NUM * BANK_ROWS > ACC_ROWS ? BANK_NUM * BANK_ROWS : ACC_ROWS;
     unsigned bits = 0;
     while ((1U << bits) < rows) bits++;
@@ -142,9 +155,15 @@ int main(void)
     barrier(); gemmini_flush(0); barrier();
     gemmini_config_ex(WS, NO_ACTIVATION, 0);
     // First Get must belong to the unfenced A overwrite, for one-shot skew.
+#if ORDER_ONLY_CASE == 0 || ORDER_ONLY_CASE == 1
     run("OVERLAP", ACC_ROWS/2, 0, 1);
+#endif
+#if ORDER_ONLY_CASE == 0 || ORDER_ONLY_CASE == 2
     run("FENCED_CONTROL", ACC_ROWS/2, 1, 1);
+#endif
+#if ORDER_ONLY_CASE == 0
     run("MVOUT_ONLY", 0, 1, 0);
+#endif
     barrier();
     printf("[%s] ordering-v1 early_errors=%u stable_errors=%u total=%u\n",
         errors ? "FAIL" : "PASS", early_errors, stable_errors, errors);
