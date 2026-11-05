@@ -102,7 +102,12 @@ static void run(const char *name, uint32_t row, int fenced, int do_add)
     if (do_add) load(1, row, 1);
     barrier();
     gemmini_extended_config_st(DIM*sizeof(acc_t), NO_ACTIVATION, ACC_SCALE_IDENTITY);
+#if ORDER_EXACT
+    // Preserve the Exact regression's normalization-state reset. RAW full-INT32
+    // attribution must also run on NoExt, which does not decode CONFIG_NORM.
+    // Gate on the test mode, not HAS_*: all six configs use the same RAW ELF.
     gemmini_config_norm(0, 0, 0, 0, 0, 0, 0);
+#endif
     gemmini_extended_mvout(dst[0].data, AF|FULL|row, DIM, DIM);
     const acc_t first = fence_first(&dst[0].data[0][0]);
     snapshot(0,0); saved[0][0][0] = first;
