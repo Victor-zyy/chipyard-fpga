@@ -26,7 +26,17 @@ int main(void)
 #define YOLO_STRESS_COLS 128
 #define YOLO_STRESS_BRANCHES 4
 #define YOLO_STRESS_BRANCH_COLS 32
+/* Keep the original 19-round acceptance path as the default. Short builds
+ * change ONLY the repeat count, not dimensions, vectors or comparisons. */
+#ifndef YOLO_STRESS_REPEATS
 #define YOLO_STRESS_REPEATS 19
+#endif
+#if YOLO_STRESS_REPEATS < 1
+#error "YOLO_STRESS_REPEATS must be positive"
+#endif
+#ifndef GEMMINI_GATHER_PHASE_DIAG
+#define GEMMINI_GATHER_PHASE_DIAG 0
+#endif
 #define YOLO_STRESS_MATMUL_COLS 64
 
 #if defined(__linux__) && !defined(GEMMINI_EXACT_GATHER_USE_CSR_TIMER)
@@ -51,6 +61,46 @@ static inline uint64_t read_target_ticks(void)
 	__asm__ volatile ("rdcycle %0" : "=r" (cycles));
 	return cycles;
 }
+#endif
+
+/* Diagnostic builds only. No hardware fence or delay is added here.
+ * Extra prints can perturb overlap timing: always rerun with DIAG=0 for
+ * acceptance. Phase durations exclude these begin/end prints, but can
+ * include pre-existing test output and concurrently executing hardware.
+ * tick is an absolute target timer, not host elapsed time. */
+#if GEMMINI_GATHER_PHASE_DIAG
+static uint64_t read_phase_ticks(void)
+{
+	/* Compiler barriers only, not RISC-V fence instructions. Keep the legacy
+	 * non-diagnostic timer and command windows completely unchanged. */
+	__asm__ volatile ("" : : : "memory");
+	const uint64_t ticks = read_target_ticks();
+	__asm__ volatile ("" : : : "memory");
+	return ticks;
+}
+
+static uint64_t phase_begin(const char *group, unsigned iteration,
+	const char *phase)
+{
+	printf("[GATHER-DIAG] group=%s iteration=%u phase=%s_BEGIN tick=%lu unit=%s\n",
+		group, iteration, phase, (unsigned long)read_phase_ticks(),
+		GATHER_TIMER_UNIT);
+	fflush(stdout);
+	return read_phase_ticks();
+}
+
+static void phase_done(const char *group, unsigned iteration,
+	const char *phase, uint64_t start)
+{
+	const uint64_t end = read_phase_ticks();
+	printf("[GATHER-DIAG] group=%s iteration=%u phase=%s_DONE tick=%lu elapsed=%lu unit=%s\n",
+		group, iteration, phase, (unsigned long)end,
+		(unsigned long)(end - start), GATHER_TIMER_UNIT);
+	fflush(stdout);
+}
+#else
+#define phase_begin(group, iteration, phase) UINT64_C(0)
+#define phase_done(group, iteration, phase, start) ((void)(start))
 #endif
 
 struct gather_case {
@@ -193,6 +243,7 @@ static int run_case(const struct gather_case *test, size_t *checked)
 	uint64_t end_ticks;
 	int mismatches = 0;
 
+	uint64_t phase_start = phase_begin(test->name, 1, "PREPARE");
 	for (size_t branch = 0; branch < test->branch_count; branch++)
 		total_cols += test->channels[branch];
 	dst_stride = (uint16_t)(total_cols + 7);
@@ -224,6 +275,7 @@ static int run_case(const struct gather_case *test, size_t *checked)
 		total_cols += test->channels[branch];
 	}
 
+	phase_done(test->name, 1, "PREPARE", phase_start);
 	printf("[STAGE] native gather %-24s branches=%u rows=%u cols=%lu\n",
 		test->name, test->branch_count, test->rows,
 		(unsigned long)total_cols);
@@ -232,6 +284,7 @@ static int run_case(const struct gather_case *test, size_t *checked)
 		(uint16_t)total_cols, dst_stride, branches,
 		test->branch_count);
 
+	phase_start = phase_begin(test->name, 1, "CHECK");
 	for (size_t row = 0; row < test->rows; row++) {
 		for (size_t column = 0; column < dst_stride; column++) {
 			const size_t index = row * dst_stride + column;
@@ -247,6 +300,7 @@ static int run_case(const struct gather_case *test, size_t *checked)
 			mismatches++;
 		}
 	}
+	phase_done(test->name, 1, "CHECK", phase_start);
 	*checked += (size_t)test->rows * total_cols;
 	printf("[%s] RTL gather %-24s branches=%u shape=%ux%lu %s=%lu\n",
 		mismatches ? "FAIL" : "PASS", test->name,
@@ -340,8 +394,11 @@ static int run_yolo_gather_stress(size_t *checked)
 		YOLO_STRESS_REPEATS);
 	for (unsigned iteration = 0; iteration < YOLO_STRESS_REPEATS;
 	     iteration++) {
+		uint64_t phase_start = phase_begin("gather-only", iteration + 1,
+			"PREPARE");
 		prepare_yolo_stress(branches, iteration);
 		memset(output, 0x33, sizeof(output));
+		phase_done("gather-only", iteration + 1, "PREPARE", phase_start);
 		printf("[STRESS-GATHER-BEGIN] iteration=%u/%u\n",
 			iteration + 1, YOLO_STRESS_REPEATS);
 		gemmini_exact_gather_issue_rows((uintptr_t)output, 0,
@@ -352,8 +409,10 @@ static int run_yolo_gather_stress(size_t *checked)
 		gemmini_fence();
 		printf("[STRESS-GATHER-FENCE-DONE] iteration=%u/%u\n",
 			iteration + 1, YOLO_STRESS_REPEATS);
+		phase_start = phase_begin("gather-only", iteration + 1, "CHECK");
 		mismatches += check_yolo_gather_output("gather-only",
 			iteration);
+		phase_done("gather-only", iteration + 1, "CHECK", phase_start);
 		*checked += YOLO_STRESS_ROWS * YOLO_STRESS_COLS;
 		if (mismatches)
 			break;
@@ -414,19 +473,25 @@ static int run_yolo_interleave_stress(size_t *checked)
 	printf("[STAGE] YOLO WS/Gather interleave rows=%u K=%u J=%u repeats=%u\n",
 		YOLO_STRESS_ROWS, YOLO_STRESS_COLS,
 		YOLO_STRESS_MATMUL_COLS, YOLO_STRESS_REPEATS);
+	uint64_t phase_start = phase_begin("interleave", 0, "PREPARE_SEED");
 	initialize_stress_weights();
 	prepare_yolo_stress(branches, 0);
 	memset(output, 0x33, sizeof(output));
+	phase_done("interleave", 0, "PREPARE_SEED", phase_start);
+	phase_start = phase_begin("interleave", 0, "SEED_GATHER");
 	gemmini_exact_gather_issue_rows((uintptr_t)output, 0,
 		YOLO_STRESS_ROWS, YOLO_STRESS_COLS, YOLO_STRESS_COLS,
 		branches, YOLO_STRESS_BRANCHES, false);
 	gemmini_fence();
+	phase_done("interleave", 0, "SEED_GATHER", phase_start);
 
 	for (unsigned iteration = 0; iteration < YOLO_STRESS_REPEATS;
 	     iteration++) {
+		phase_start = phase_begin("interleave", iteration + 1, "PREPARE_WS");
 		snapshot_stress_matmul_expected();
 		memset(stress_matmul_output, 0x33,
 			sizeof(stress_matmul_output));
+		phase_done("interleave", iteration + 1, "PREPARE_WS", phase_start);
 		printf("[INTERLEAVE-WS-BEGIN] iteration=%u/%u\n",
 			iteration + 1, YOLO_STRESS_REPEATS);
 		tiled_matmul_auto(YOLO_STRESS_ROWS,
@@ -441,7 +506,9 @@ static int run_yolo_interleave_stress(size_t *checked)
 		printf("[INTERLEAVE-WS-ISSUE-DONE] iteration=%u/%u\n",
 			iteration + 1, YOLO_STRESS_REPEATS);
 
+		phase_start = phase_begin("interleave", iteration + 1, "PREPARE_GATHER");
 		prepare_yolo_stress(branches, iteration + 1);
+		phase_done("interleave", iteration + 1, "PREPARE_GATHER", phase_start);
 		printf("[INTERLEAVE-GATHER-BEGIN] iteration=%u/%u\n",
 			iteration + 1, YOLO_STRESS_REPEATS);
 		gemmini_exact_gather_issue_rows((uintptr_t)output, 0,
@@ -453,9 +520,13 @@ static int run_yolo_interleave_stress(size_t *checked)
 		printf("[INTERLEAVE-FENCE-DONE] iteration=%u/%u\n",
 			iteration + 1, YOLO_STRESS_REPEATS);
 
+		phase_start = phase_begin("interleave", iteration + 1, "CHECK_WS");
 		mismatches += check_stress_matmul_output(iteration);
+		phase_done("interleave", iteration + 1, "CHECK_WS", phase_start);
+		phase_start = phase_begin("interleave", iteration + 1, "CHECK_GATHER");
 		mismatches += check_yolo_gather_output("interleave-gather",
 			iteration);
+		phase_done("interleave", iteration + 1, "CHECK_GATHER", phase_start);
 		*checked += YOLO_STRESS_ROWS *
 			(YOLO_STRESS_MATMUL_COLS + YOLO_STRESS_COLS);
 		if (mismatches)
@@ -471,13 +542,24 @@ int main(void)
 	int mismatches = 0;
 	size_t checked = 0;
 
+	/* With DIAG=0 the legacy logging and command/fence sequence is retained. */
+	uint64_t total_start = phase_begin("main", 0, "TOTAL");
+#if GEMMINI_GATHER_PHASE_DIAG
+	printf("[INFO] gather-progress-v1 MAIN_ENTER repeats=%u phase_diag=1 unit=%s\n",
+		YOLO_STRESS_REPEATS, GATHER_TIMER_UNIT);
+	printf("[INFO] diagnostic timings are not a benchmark; rerun phase_diag=0 for acceptance\n");
+	fflush(stdout);
+#endif
+	uint64_t phase_start = phase_begin("main", 0, "FLUSH_ISSUE");
 	gemmini_flush(0);
+	phase_done("main", 0, "FLUSH_ISSUE", phase_start);
 	for (size_t index = 0; index < sizeof(cases) / sizeof(cases[0]); index++)
 		mismatches += run_case(&cases[index], &checked);
 	if (!mismatches)
 		mismatches += run_yolo_gather_stress(&checked);
 	if (!mismatches)
 		mismatches += run_yolo_interleave_stress(&checked);
+	phase_done("main", 0, "TOTAL", total_start);
 	if (mismatches) {
 		printf("[FAIL] Gemmini RTL Exact Gather mismatches=%d\n", mismatches);
 		return 1;

@@ -134,6 +134,27 @@ endforeach()
 target_compile_definitions(gemmini-ordering-raw PRIVATE ORDER_EXACT=0)
 target_compile_definitions(gemmini-ordering-exact PRIVATE ORDER_EXACT=1)
 
+# Gather progress diagnostics use the same dimensions and checks as the
+# original test. DIAG=0 variants retain the original command-window logging.
+foreach(variant short short-diag full full-diag)
+    set(t gemmini-exact-gather-${variant})
+    add_executable(${t} gemmini-exact-gather.c)
+    target_include_directories(${t} PRIVATE ${GEMMINI_TEST_ROOT})
+    target_compile_options(${t} PRIVATE -include ${GEMMINI_ORDERING_HEADER} -fno-fast-math)
+    target_compile_definitions(${t} PRIVATE BAREMETAL=1)
+    if(variant MATCHES "^short")
+        target_compile_definitions(${t} PRIVATE YOLO_STRESS_REPEATS=2)
+    else()
+        target_compile_definitions(${t} PRIVATE YOLO_STRESS_REPEATS=19)
+    endif()
+    if(variant MATCHES "diag$")
+        target_compile_definitions(${t} PRIVATE GEMMINI_GATHER_PHASE_DIAG=1)
+    else()
+        target_compile_definitions(${t} PRIVATE GEMMINI_GATHER_PHASE_DIAG=0)
+    endif()
+    target_link_libraries(${t} PRIVATE m)
+endforeach()
+
 # Same RAW ELF used across all attribution configs. Separate processes ensure
 # the first-Get injector also delays A in the fenced control, not only overlap.
 foreach(case overlap fenced)
