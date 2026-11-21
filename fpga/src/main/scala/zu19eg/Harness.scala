@@ -109,6 +109,8 @@ class Zu19egHarnessImp(val zu19egOuter: Zu19egHarness)
     zu19egOuter.leds(5) := !zu19egOuter.ddrOverlay.calibComplete
   }
 
+  // The Chisel 6 direct bore needs the source registers to exist first.
+  instantiateChipTops()
 
   // Five registered observation levels; no return path into the DUT.
   // Level synchronizers are sufficient for LEDs. They are NOT an atomic
@@ -116,7 +118,8 @@ class Zu19egHarnessImp(val zu19egOuter: Zu19egHarness)
   if (zu19egOuter.dp(RoCCRunLedDebugKey)) {
     require(zu19egOuter.leds.size >= 6, "RUN LED diagnostics require six board LEDs")
     withClockAndReset(referenceClock, referenceReset) {
-      val runLedRaw = VecInit(RoCCRunLedDebug.channels.map(RoCCRunLedDebug.sink))
+      val runLedRaw = VecInit(RoCCRunLedDebug.channels.map(name =>
+        RoCCRunLedDebug.sink(name)(zu19egOuter.dp)))
       val runLedSync1 = RegNext(runLedRaw, VecInit(Seq.fill(5)(false.B)))
       val runLedSync2 = RegNext(runLedSync1, VecInit(Seq.fill(5)(false.B)))
       val cpuPresented = runLedSync2(0)
@@ -129,6 +132,4 @@ class Zu19egHarnessImp(val zu19egOuter: Zu19egHarness)
       zu19egOuter.leds(4) := !runLedSync2(4)
     }
   }
-
-  instantiateChipTops()
 }
