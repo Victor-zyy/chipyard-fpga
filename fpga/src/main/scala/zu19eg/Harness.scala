@@ -5,6 +5,7 @@ import chisel3.util.log2Ceil
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.prci._
 import freechips.rocketchip.subsystem.SystemBusKey
+import freechips.rocketchip.tile.{RoCCRunLedDebug, RoCCRunLedDebugKey}
 import freechips.rocketchip.tilelink._
 import org.chipsalliance.cde.config.Parameters
 import sifive.blocks.devices.spi.{PeripherySPIKey, SPIPortIO}
@@ -92,17 +93,41 @@ class Zu19egHarnessImp(val zu19egOuter: Zu19egHarness)
   zu19egOuter.ddrBlockDuringReset.module.reset := memoryNotReady
 
   // Six on-board LEDs, active LOW. AW17 is reset only, not also SW0.
+  val runLedBlink = if (zu19egOuter.dp(RoCCRunLedDebugKey))
+    Some(WireDefault(false.B)) else None
   zu19egOuter.leds.foreach(_ := true.B)
   if (zu19egOuter.leds.nonEmpty) {
     withClockAndReset(referenceClock, referenceReset) {
       val counterWidth = log2Ceil((referenceClockFreqMHz * 1000000).toInt)
       val counter = RegInit(0.U(counterWidth.W))
       counter := counter + 1.U
+      runLedBlink.foreach(_ := counter(counter.getWidth - 1))
       zu19egOuter.leds.head := !counter(counter.getWidth - 1)
     }
   }
   if (zu19egOuter.leds.size >= 6) {
     zu19egOuter.leds(5) := !zu19egOuter.ddrOverlay.calibComplete
+  }
+
+
+  // Five registered observation levels; no return path into the DUT.
+  // Level synchronizers are sufficient for LEDs. They are NOT an atomic
+  // multi-bit trace snapshot; read only after the stopped state has settled.
+  if (zu19egOuter.dp(RoCCRunLedDebugKey)) {
+    require(zu19egOuter.leds.size >= 6, "RUN LED diagnostics require six board LEDs")
+    withClockAndReset(referenceClock, referenceReset) {
+      val runLedRaw = VecInit(RoCCRunLedDebug.channels.map(RoCCRunLedDebug.sink))
+      val runLedSync1 = RegNext(runLedRaw, VecInit(Seq.fill(5)(false.B)))
+      val runLedSync2 = RegNext(runLedSync1, VecInit(Seq.fill(5)(false.B)))
+      val cpuPresented = runLedSync2(0)
+      val cpuAccepted = runLedSync2(1)
+      // Active-low LEDs: solid=accepted; blink=offered but not yet accepted.
+      zu19egOuter.leds(1) := !(cpuAccepted ||
+        (cpuPresented && !cpuAccepted && runLedBlink.get))
+      zu19egOuter.leds(2) := !runLedSync2(2)
+      zu19egOuter.leds(3) := !runLedSync2(3)
+      zu19egOuter.leds(4) := !runLedSync2(4)
+    }
   }
 
   instantiateChipTops()
